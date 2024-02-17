@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scrape Form</title>
+</head>
+<body>
+    <h2>Scrape Form</h2>
+    <form method="post">
+        {% csrf_token %}
+        <label for="key_word">Scrape Books:</label>
+        <input type="text" id="key_word" name="key_word" value="history">
+        <br>
+        <label for="from_books" >From Page:</label>
+        <input type="number" id="from_books" name="from_books" value="1">
+        <label for="to_books">To Page:</label>
+        <input type="number" id="to_books" name="to_books" value="5">
+        <br>
+        <button type="submit">Scrape</button>
+    </form>
+</body>
+</html>
