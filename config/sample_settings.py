@@ -7,3 +7,15 @@ SECRET_KEY = '<enter you secret key here>'
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+
+DATABASES = {
+   'default': {
+       'ENGINE': 'django.db.backends.postgresql',
+       'NAME': '<database_name>',
+       'USER': '<database_username>',
+       'PASSWORD': '<password>',
+       'HOST': '<database_hostname_or_ip>',
+       'PORT': '<database_port>',
+   }
+}
