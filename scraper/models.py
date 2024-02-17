@@ -13,11 +13,9 @@ class Book(models.Model):
     title = models.CharField(max_length=200, unique=True)
     author = models.ManyToManyField(
         Author, related_name='author',
-        on_delete=models.CASCADE
     )
     publisher = models.ManyToManyField(
         Publisher, related_name='publisher',
-        on_delete=models.CASCADE
     )
     year = models.PositiveIntegerField()
     language = models.CharField(max_length=55)
