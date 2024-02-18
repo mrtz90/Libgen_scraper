@@ -2,6 +2,7 @@ from django.shortcuts import render, HttpResponse
 import requests
 from bs4 import BeautifulSoup
 import re
+import urllib3
 
 from libgen.models import Author, Book, Publisher, SearchResult, KeyWordSearched
 
@@ -11,8 +12,11 @@ def scrape_form(request):
         key_word = request.POST.get('key_word')
         from_books = int(request.POST.get('from_books'))
         to_books = int(request.POST.get('to_books'))
+
+        # Save the keyword searched
+        keyword_searched = KeyWordSearched.objects.create(key_word=key_word)
         result = search_key_work(key_word, from_books, to_books)
-        scrape_books(result)
+        scrape_books(result, keyword_searched)
 
         return HttpResponse("Scraping completed successfully!")
     else:
@@ -45,26 +49,50 @@ def search_key_work(key_word, from_page, to_page):
                 if a['href'].startswith('book'):
                     link = a['href']
                     links.append(link)
+    print(len(links))
     return links
 
 
-def scrape_books(links):
-    for link in links[0:5]:
-        url = f'https://libgen.is/{link}'
-        response = requests.get(url, verify=False)
-        print("status code:", response.status_code, "Fetching url:", url)
-        content = BeautifulSoup(response.text, "html.parser")
-        trs = content.find('table').find_all('tr')
-        image_link = 'https://libgen.rs' + trs[1].find('img')['src']
-        title = trs[1].find_all('a')[1].text.strip()
-        authors = remove_strings_in_parentheses(trs[10].find('b').text.split(','))
-        publisher = trs[12].find_all('td')[1].text.strip()
-        year = trs[13].find_all('td')[1].text.strip()
-        language = trs[14].find_all('td')[1].text.strip()
-        pages = trs[14].find_all('td')[3].text.strip()
-        topic = trs[22].find_all('td')[1].text.strip()
-        about_book = trs[31].find('td').text.strip()
-        print(about_book)
+def scrape_books(links, keyword_searched):
+    for link in links:
+        try:
+            url = f'https://libgen.is/{link}'
+            response = requests.get(url, verify=False)
+            print("status code:", response.status_code, "Fetching url:", url)
+            content = BeautifulSoup(response.text, "html.parser")
+            trs = content.find('table').find_all('tr')
+            image_link = 'https://libgen.rs' + trs[1].find('img')['src']
+            title = trs[1].find_all('a')[1].text.strip()
+            authors = remove_strings_in_parentheses(trs[10].find('b').text.split(','))
+            publisher = trs[12].find_all('td')[1].text.strip()
+            year = trs[13].find_all('td')[1].text.strip()
+            language = trs[14].find_all('td')[1].text.strip()
+            pages = trs[14].find_all('td')[3].text.strip().split('\\')[0]
+            topic = trs[22].find_all('td')[1].text.strip()
+            about_book = trs[31].find('td').text.strip()
+            # Fetch or create authors
+            authors = [Author.objects.get_or_create(name=name)[0] for name in authors]
+            # Fetch or create publisher
+            publisher, _ = Publisher.objects.get_or_create(name=publisher)
+            # Create book instance
+            book = Book.objects.create(
+                title=title,
+                year=year,
+                language=language,
+                pages=pages,
+                topic=topic,
+                about_book=about_book
+            )
+            # Add authors and publisher to the book
+            book.author.add(*authors)
+            book.publisher.add(publisher)
+
+            # Save the search result
+            SearchResult.objects.create(key_word=keyword_searched, book=book, link=url)
+
+            print(f"Created Book: {book}")
+        except Exception as e:
+            print(e)
 
 
 def remove_strings_in_parentheses(strings):
