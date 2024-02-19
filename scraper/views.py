@@ -1,3 +1,7 @@
+import os
+from datetime import datetime
+from urllib.parse import urlparse
+from django.conf import settings
 from django.shortcuts import render, HttpResponse
 import requests
 from bs4 import BeautifulSoup
@@ -15,15 +19,21 @@ def scrape_form(request):
 
         # Save the keyword searched
         keyword_searched = KeyWordSearched.objects.create(key_word=key_word)
-        result = search_key_work(key_word, from_books, to_books)
-        scrape_books(result, keyword_searched)
+        result = search_key_word(key_word, from_books, to_books)
+
+        # Create a folder for images
+        print(datetime.now().astimezone())
+        folder_path = os.path.join(settings.MEDIA_ROOT, key_word + '_' + datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
+        os.makedirs(folder_path, exist_ok=True)
+
+        scrape_books(result, keyword_searched, folder_path)
 
         return HttpResponse("Scraping completed successfully!")
     else:
         return render(request, 'scrape_form.html')
 
 
-def search_key_work(key_word, from_page, to_page):
+def search_key_word(key_word, from_page, to_page):
     url = f'https://libgen.is/search.php?req={key_word}' \
           f'&open=0&res=25&view=simple&phrase=1&column=def'
     response = requests.get(url)
@@ -53,7 +63,7 @@ def search_key_work(key_word, from_page, to_page):
     return links
 
 
-def scrape_books(links, keyword_searched):
+def scrape_books(links, keyword_searched, folder_path):
     for link in links:
         try:
             url = f'https://libgen.is/{link}'
@@ -63,6 +73,7 @@ def scrape_books(links, keyword_searched):
             trs = content.find('table').find_all('tr')
             image_link = 'https://libgen.rs' + trs[1].find('img')['src']
             title = trs[1].find_all('a')[1].text.strip()
+            file_url = trs[1].find_all('a')[1]['href']
             authors = remove_strings_in_parentheses(trs[10].find('b').text.split(','))
             publisher = trs[12].find_all('td')[1].text.strip()
             year = trs[13].find_all('td')[1].text.strip()
@@ -70,6 +81,21 @@ def scrape_books(links, keyword_searched):
             pages = trs[14].find_all('td')[3].text.strip().split('\\')[0]
             topic = trs[22].find_all('td')[1].text.strip()
             about_book = trs[31].find('td').text.strip()
+
+            # Save the html file
+            download_and_save_file(response, 'html', title, folder_path, 'html')
+            # Download and save the image
+            file_type = 'image'
+            image_filename = download_and_save_file(image_link, 'images', title, folder_path, file_type)
+
+            # Download and save the PDF file (if available)
+            pdf_link = find_pdf_link(file_url)
+            if pdf_link:
+                file_type = 'pdf'
+                pdf_filename = download_and_save_file(pdf_link, 'pdfs', title, folder_path, file_type)
+            else:
+                pdf_filename = None
+
             # Fetch or create authors
             authors = [Author.objects.get_or_create(name=name)[0] for name in authors]
             # Fetch or create publisher
@@ -81,7 +107,9 @@ def scrape_books(links, keyword_searched):
                 language=language,
                 pages=pages,
                 topic=topic,
-                about_book=about_book
+                about_book=about_book,
+                image_file_path=image_filename,
+                book_file_path=pdf_filename,
             )
             # Add authors and publisher to the book
             book.author.add(*authors)
@@ -105,3 +133,47 @@ def remove_strings_in_parentheses(strings):
         strings[i] = re.sub(pattern, '', strings[i]).strip()
 
     return strings
+
+
+def download_and_save_file(file_url, folder_name, book_title, folder_path, file_type):
+    folder_path = os.path.join(folder_path, folder_name)
+    os.makedirs(folder_path, exist_ok=True)
+    try:
+        # Determine the file extension based on the file type
+        print(file_type)
+        if file_type == 'pdf':
+            file_extension = 'pdf'
+        elif file_type == 'image':
+            file_extension = 'jpg'
+        elif file_type == 'html':
+            file_extension = 'html'
+        else:
+            raise ValueError("Invalid file type. Supported types are 'pdf' and 'image'.")
+
+        # Construct the file path with the book title and appropriate file extension
+        file_path = os.path.join(folder_path, f"{book_title}.{file_extension}")
+
+        # Download the file
+        if file_type != 'html':
+            response = requests.get(file_url)
+        else:
+            response = file_url
+
+        # Save the file
+        with open(file_path, 'wb+') as f:
+            f.write(response.content)
+    except Exception as e:
+        print(e)
+
+    return os.path.join(folder_name, f"{book_title}.{file_extension}")
+
+
+def find_pdf_link(url):
+    # Search for PDF links in the content
+    response = requests.get(url, verify=False)
+    print("status code:", response.status_code, "Fetching url:", url)
+    content = BeautifulSoup(response.text, "html.parser")
+    link = content.find('div', {'id': 'download'}).find_all('a')[2]['href']
+    if link.endswith('.pdf'):
+        return link
+    return None

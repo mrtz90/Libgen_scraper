@@ -38,6 +38,8 @@ class Book(models.Model):
     pages = models.IntegerField(verbose_name='Number of Pages')
     topic = models.CharField(max_length=100, verbose_name='Topic')
     about_book = models.TextField(verbose_name='Description')
+    book_file_path = models.CharField(max_length=255, null=True, blank=True)
+    image_file_path = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return self.title
