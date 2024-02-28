@@ -1,6 +1,7 @@
 from django.db import models
 
 
+# create author model
 class Author(models.Model):
     name = models.CharField(max_length=55, unique=True, verbose_name='Author Name')
 
@@ -8,6 +9,7 @@ class Author(models.Model):
         return self.name
 
 
+# Create publisher model
 class Publisher(models.Model):
     name = models.CharField(max_length=55, unique=True, verbose_name='Publisher Name')
 
@@ -15,6 +17,7 @@ class Publisher(models.Model):
         return self.name
 
 
+# Create keyword model
 class KeyWordSearched(models.Model):
     key_word = models.CharField(max_length=100, verbose_name='Keyword Searched')
     search_date = models.DateTimeField(auto_now_add=True)
@@ -23,6 +26,7 @@ class KeyWordSearched(models.Model):
         return self.key_word
 
 
+# Create book model
 class Book(models.Model):
     title = models.CharField(max_length=200, unique=True, verbose_name='Title')
     author = models.ManyToManyField(
@@ -40,6 +44,7 @@ class Book(models.Model):
     about_book = models.TextField(verbose_name='Description')
     book_file_path = models.CharField(max_length=255, null=True, blank=True)
     image_file_path = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField()
 
     def __str__(self):
         return self.title

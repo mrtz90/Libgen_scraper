@@ -16,10 +16,12 @@ class BookAdmin(ExportMixin, admin.ModelAdmin):
     list_display_links = ['id', 'display_authors', 'display_publisher', ]
     list_filter = ['title', 'author', 'publisher']
 
-    def display_authors(self, obj):
+    @staticmethod
+    def display_authors(obj):
         return ", ".join([author.name for author in obj.author.all()])
 
-    def display_publisher(self, obj):
+    @staticmethod
+    def display_publisher(obj):
         return ", ".join([publisher.name for publisher in obj.publisher.all()])
 
 

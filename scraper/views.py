@@ -3,17 +3,14 @@ import re
 import requests
 import shutil
 from datetime import datetime
-from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.http import HttpResponse
 from django.shortcuts import render
-from import_export.admin import ExportActionMixin
-from import_export.resources import ModelResource
 
 from libgen.models import Author, Book, Publisher, SearchResult, KeyWordSearched
-from .exporter import export_books
+from libgen.resources import export_books
 from .forms import ScrapForm
 
 
@@ -28,18 +25,18 @@ def scrape_form(request):
             from_page = form.cleaned_data['from_page']
             to_page = form.cleaned_data['to_page']
             export_format = form.cleaned_data['export_format']
-
-        result = search_key_word(key_word, from_page, to_page)
-
-        # Create a folder for images
-        folder_path = os.path.join(settings.MEDIA_ROOT, key_word
-                                   + '_' + datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-                                   )
-        os.makedirs(folder_path, exist_ok=True)
-        print(folder_path)
-        scrape_books(result, key_word, folder_path)
-        exported_file_path = export_books(key_word, from_page, to_page, export_format, folder_path)
-        # zip_output_folder(folder_path)
+            keyword_searched = KeyWordSearched.objects.create(key_word=key_word)
+            result = search_key_word(key_word, from_page, to_page)
+            created = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Create a folder for images, htmls, files and report
+            folder_path = os.path.join(settings.MEDIA_ROOT, key_word
+                                       + '_' + datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+                                       )
+            os.makedirs(folder_path, exist_ok=True)
+            print(folder_path)
+            scrape_books(result, keyword_searched, folder_path, created)
+            export_books(export_format, folder_path, created)
+            zip_output_folder(folder_path)
         return HttpResponse("Scraping completed successfully!")
     else:
         form = ScrapForm()
@@ -48,7 +45,7 @@ def scrape_form(request):
 
 def search_key_word(key_word, from_page, to_page):
     """
-    Search for the given keyword in Libgen and extract links to books.
+    Search for the given keyword in Libgen and extract links.
     """
     url = f'https://libgen.is/search.php?req={key_word}' \
           f'&open=0&res=25&view=simple&phrase=1&column=def'
@@ -79,7 +76,7 @@ def search_key_word(key_word, from_page, to_page):
     return links
 
 
-def scrape_books(links, keyword_searched, folder_path):
+def scrape_books(links, keyword_searched, folder_path, created):
     """
     Scrape book details from Libgen based on provided links.
     """
@@ -129,6 +126,7 @@ def scrape_books(links, keyword_searched, folder_path):
                 about_book=about_book,
                 image_file_path=image_filename,
                 book_file_path=pdf_filename,
+                created_at=created
             )
             # Add authors and publisher to the book
             book.author.add(*authors)
@@ -176,9 +174,6 @@ def download_and_save_file(file_url, folder_name, book_title, folder_path, file_
 
         # Construct the file path with the book title and appropriate file extension
         file_path = os.path.join(folder_path, f"{sanitized_title}.{file_extension}")
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 '
-                          '(KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
         # Check if the file already exists
         if os.path.exists(file_path):
@@ -194,7 +189,7 @@ def download_and_save_file(file_url, folder_name, book_title, folder_path, file_
 
         # Download the file
         if file_type != 'html':
-            response = requests.get(file_url, headers)
+            response = requests.get(file_url)
         else:
             response = file_url
 
@@ -204,7 +199,7 @@ def download_and_save_file(file_url, folder_name, book_title, folder_path, file_
     except Exception as e:
         print(e)
 
-    return os.path.join(folder_name, f"{sanitized_title}.{file_extension}")
+    return file_path
 
 
 def sanitize_filename(filename):
@@ -228,16 +223,13 @@ def find_pdf_link(url):
     return None
 
 
-'''
 def zip_output_folder(output_folder):
     """
     Zip the output folder containing the generated reports.
-
-    :param output_folder: The path of the folder to be zipped.
-    :return: The path of the zipped file.
     """
-    zip_filename = output_folder.split('\\')[1]
+    zip_filename = output_folder.split('\\')[-1]
+    print(output_folder)
+    print(zip_filename)
     shutil.make_archive(zip_filename, 'zip', base_dir=zip_filename, root_dir='media\\')
-    shutil.move(f'{zip_filename}.zip', f'output\\{zip_filename}.zip')
+    shutil.move(f'{zip_filename}.zip', f'media\\{zip_filename}.zip')
     return f'output\\{zip_filename}'
-'''

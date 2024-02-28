@@ -3,7 +3,7 @@ from django import forms
 
 FORMAT_CHOICES = (
     ('csv', 'csv'),
-    ('josn', 'json'),
+    ('json', 'json'),
     ('xls', 'xls'),
 )
 
